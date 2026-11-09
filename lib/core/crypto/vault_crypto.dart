@@ -19,6 +19,22 @@ class KdfParams {
   static const int defaultIterations = 2;
   static const int defaultParallelism = 1;
 
+  /// Used when the key header is stored in the cloud (64 MiB, t=3).
+  static const int cloudMemoryKiB = 65536;
+  static const int cloudIterations = 3;
+
+  /// Upper bounds accepted from an untrusted source (a cloud header), so a
+  /// malicious server cannot make the device allocate gigabytes.
+  bool get withinSafeLimits =>
+      memoryKiB >= 8192 &&
+      memoryKiB <= 262144 &&
+      iterations >= 1 &&
+      iterations <= 10 &&
+      parallelism >= 1 &&
+      parallelism <= 4 &&
+      salt.length >= 16 &&
+      salt.length <= 64;
+
   final int memoryKiB;
   final int iterations;
   final int parallelism;

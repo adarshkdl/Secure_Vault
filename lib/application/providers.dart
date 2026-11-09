@@ -130,9 +130,13 @@ class VaultController extends Notifier<VaultState> {
     _session = s;
     // Auto-purge items past the Recently Deleted retention window.
     final cutoff = DateTime.now().subtract(recentlyDeletedRetention);
-    d.credentials.removeWhere(
-      (c) => c.deletedAt != null && c.deletedAt!.isBefore(cutoff),
-    );
+    final expired = d.credentials
+        .where((c) => c.deletedAt != null && c.deletedAt!.isBefore(cutoff))
+        .toList();
+    for (final c in expired) {
+      d.tombstones[c.id] = DateTime.now();
+    }
+    d.credentials.removeWhere((c) => expired.contains(c));
     state = VaultState(
       status: VaultStatus.unlocked,
       data: d,
@@ -289,7 +293,10 @@ class VaultController extends Notifier<VaultState> {
     final i = _data.credentials.indexWhere((c) => c.id == id);
     if (i < 0) return;
     final c = _data.credentials[i];
-    _data.credentials[i] = c.copyWith(isFavorite: !c.isFavorite);
+    _data.credentials[i] = c.copyWith(
+      isFavorite: !c.isFavorite,
+      updatedAt: DateTime.now(),
+    );
     await _persist();
   }
 
@@ -305,8 +312,10 @@ class VaultController extends Notifier<VaultState> {
   Future<void> softDelete(String id) async {
     final i = _data.credentials.indexWhere((c) => c.id == id);
     if (i < 0) return;
+    final now = DateTime.now();
     _data.credentials[i] = _data.credentials[i].copyWith(
-      deletedAt: DateTime.now(),
+      deletedAt: now,
+      updatedAt: now,
     );
     await _persist();
   }
@@ -314,23 +323,32 @@ class VaultController extends Notifier<VaultState> {
   Future<void> restore(String id) async {
     final i = _data.credentials.indexWhere((c) => c.id == id);
     if (i < 0) return;
-    _data.credentials[i] = _data.credentials[i].copyWith(clearDeleted: true);
+    _data.credentials[i] = _data.credentials[i].copyWith(
+      clearDeleted: true,
+      updatedAt: DateTime.now(),
+    );
     await _persist();
   }
 
   Future<void> deleteForever(String id) async {
     _data.credentials.removeWhere((c) => c.id == id);
+    _data.tombstones[id] = DateTime.now();
     await _persist();
   }
 
   Future<void> emptyTrash() async {
+    final now = DateTime.now();
+    for (final c in _data.credentials.where((c) => c.isDeleted)) {
+      _data.tombstones[c.id] = now;
+    }
     _data.credentials.removeWhere((c) => c.isDeleted);
     await _persist();
   }
 
   // -- Categories -----------------------------------------------------------
 
-  Future<void> saveCategory(Category c) async {
+  Future<void> saveCategory(Category category) async {
+    final c = category.copyWith(updatedAt: DateTime.now());
     final list = _data.customCategories;
     final i = list.indexWhere((x) => x.id == c.id);
     if (i >= 0) {
@@ -345,15 +363,81 @@ class VaultController extends Notifier<VaultState> {
   Future<bool> deleteCategory(String id) async {
     if (_data.credentials.any((c) => c.categoryId == id)) return false;
     _data.customCategories.removeWhere((c) => c.id == id);
+    _data.tombstones[id] = DateTime.now();
     await _persist();
     return true;
   }
 
   // -- Master password / destructive ---------------------------------------
 
-  Future<void> changeMasterPassword(String newPassword) async {
-    await _repo.changePassword(_session!, _data, newPassword);
+  /// [cloudStrength] uses the stronger key-stretching settings (set when cloud
+  /// sync is on, because the wrapped key then also lives on a server).
+  Future<void> changeMasterPassword(
+    String newPassword, {
+    bool cloudStrength = false,
+  }) async {
+    await _repo.changePassword(
+      _session!,
+      _data,
+      newPassword,
+      kdf: cloudStrength
+          ? KdfParams.fresh(
+              memoryKiB: KdfParams.cloudMemoryKiB,
+              iterations: KdfParams.cloudIterations,
+            )
+          : null,
+    );
     // The stored biometric key is still valid (data key unchanged).
+  }
+
+  // -- Cloud sync support ---------------------------------------------------
+
+  /// Key material the sync layer needs; null while the vault is locked. The
+  /// returned [dek] is the live key: callers must not keep or modify it.
+  ({List<int> dek, KdfParams kdf, Sealed wrapped})? syncKeys() {
+    final s = _session;
+    return s == null ? null : (dek: s.dek, kdf: s.kdf, wrapped: s.wrapped);
+  }
+
+  /// Raises the key-stretching cost of the master-password wrapper before its
+  /// header is uploaded (it then sits on a server, so offline guessing against
+  /// it should be as expensive as is practical on a phone). Returns false if
+  /// [password] is wrong.
+  Future<bool> strengthenKdfForCloud(String password) async {
+    if (!await _repo.verifyPassword(password)) return false;
+    await _repo.changePassword(
+      _session!,
+      _data,
+      password,
+      kdf: KdfParams.fresh(
+        memoryKiB: KdfParams.cloudMemoryKiB,
+        iterations: KdfParams.cloudIterations,
+      ),
+    );
+    return true;
+  }
+
+  /// Saves a vault produced by a sync merge. Atomic: on failure the previous
+  /// in-memory vault is restored and the error rethrown.
+  Future<void> applySyncedData(VaultData merged) => replaceWithBackup(merged);
+
+  /// Joins an existing cloud vault: this device adopts the cloud vault's data
+  /// key and master-password wrapper, and keeps the records it already had
+  /// ([merged]). The local file is replaced atomically; the biometric key
+  /// stored for the old data key is discarded.
+  Future<void> adoptCloudKey({
+    required List<int> dek,
+    required KdfParams kdf,
+    required Sealed wrapped,
+    required VaultData merged,
+  }) async {
+    final fresh = VaultSession(dek: dek, kdf: kdf, wrapped: wrapped);
+    await _repo.save(fresh, merged); // atomic temp-file + rename
+    final old = _session;
+    _session = fresh;
+    old?.wipe();
+    state = state.copyWith(data: merged, revision: state.revision + 1);
+    await disableBiometric();
   }
 
   /// Replaces vault contents with a verified, decrypted backup. The existing

@@ -1,0 +1,50 @@
+rules_version = '2';
+
+// SecureVault cloud sync. Every document lives under users/{uid}/ and only the
+// signed-in owner can touch it. The server stores ciphertext only; these rules
+// also check the shape and size of what is written.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    // One encrypted record or category (or a tombstone) per document.
+    match /users/{uid}/items/{itemId} {
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(
+             ['v', 'k', 'ut', 'del', 'n', 'ct', 'mac', 'st'])
+        && request.resource.data.v == 1
+        && request.resource.data.k in ['c', 'k']
+        && request.resource.data.ut is int
+        && request.resource.data.del is bool
+        && request.resource.data.n is string
+        && request.resource.data.n.size() <= 64
+        && request.resource.data.ct is string
+        && request.resource.data.ct.size() <= 200000
+        && request.resource.data.mac is string
+        && request.resource.data.mac.size() <= 64
+        && request.resource.data.st == request.time;
+    }
+
+    // The key header (KDF settings + wrapped data key). Useless without the
+    // master password, which never leaves the device.
+    match /users/{uid}/meta/{docId} {
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid)
+        && docId == 'vault'
+        && request.resource.data.keys().hasOnly(
+             ['v', 'kdf', 'wrapped', 'rev', 'st'])
+        && request.resource.data.v == 1
+        && request.resource.data.rev is int
+        && request.resource.data.st == request.time;
+    }
+
+    // Everything else is closed.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

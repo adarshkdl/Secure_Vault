@@ -47,6 +47,9 @@ dependencies:
   mobile_scanner: 7.5.0
   qr_flutter: 4.1.0
   flutter_svg: 2.3.0
+  firebase_core: 5.1.0
+  firebase_auth: 7.0.1
+  cloud_firestore: 7.1.0
 
 dev_dependencies:
   flutter_test:

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../application/providers.dart';
+import '../../application/sync_controller.dart';
 import '../helpers.dart';
 import '../widgets/password_widgets.dart';
 import 'backup_screen.dart';
@@ -9,6 +10,7 @@ import 'deleted_screen.dart';
 import 'import_screen.dart';
 import 'info_screen.dart';
 import 'qr/qr_receive_screen.dart';
+import 'sync_screen.dart';
 
 class SettingsTab extends ConsumerWidget {
   const SettingsTab({super.key});
@@ -161,6 +163,27 @@ class SettingsTab extends ConsumerWidget {
           ),
         ),
         header('Data'),
+        Consumer(
+          builder: (context, ref, _) {
+            final st = ref.watch(syncControllerProvider);
+            final sub = switch (st.phase) {
+              SyncPhase.unavailable => 'Not set up in this build',
+              SyncPhase.signedOut || SyncPhase.checking => 'Off',
+              SyncPhase.needsSetup || SyncPhase.needsJoin => 'Finish setup',
+              SyncPhase.error => 'Problem - tap for details',
+              SyncPhase.ready || SyncPhase.syncing => 'On - ${st.email ?? ''}',
+            };
+            return ListTile(
+              leading: const Icon(Icons.cloud_sync_outlined),
+              title: const Text('Cloud sync'),
+              subtitle: Text('Encrypted, via Firebase. $sub'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const SyncScreen()),
+              ),
+            );
+          },
+        ),
         ListTile(
           leading: const Icon(Icons.backup_outlined),
           title: const Text('Backup & restore'),
@@ -341,7 +364,13 @@ class SettingsTab extends ConsumerWidget {
     pw.dispose();
     cf.dispose();
     if (go != true) return;
-    await ref.read(vaultProvider.notifier).changeMasterPassword(newPw);
+    final syncOn = ref.read(syncStoreProvider).enabledUid != null;
+    await ref
+        .read(vaultProvider.notifier)
+        .changeMasterPassword(newPw, cloudStrength: syncOn);
+    if (syncOn) {
+      await ref.read(syncControllerProvider.notifier).onPasswordChanged();
+    }
     if (context.mounted) showSnack(context, 'Master password changed.');
   }
 }

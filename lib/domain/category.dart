@@ -12,6 +12,7 @@ class Category {
     this.subtitleKey,
     this.autoTitleKey,
     this.allowCustomFields = true,
+    this.updatedAt,
   });
 
   final String id;
@@ -33,6 +34,10 @@ class Category {
   /// Custom fields already on a record stay and can still be removed.
   final bool allowCustomFields;
 
+  /// Last edit time of a custom category (used by cloud sync to pick the newer
+  /// edit). Null for built-ins and for categories saved before sync existed.
+  final DateTime? updatedAt;
+
   Category copyWith({
     String? name,
     String? iconKey,
@@ -40,6 +45,7 @@ class Category {
     List<FieldDef>? fields,
     int? sortOrder,
     String? subtitleKey,
+    DateTime? updatedAt,
   }) => Category(
     id: id,
     name: name ?? this.name,
@@ -51,6 +57,7 @@ class Category {
     subtitleKey: subtitleKey ?? this.subtitleKey,
     autoTitleKey: autoTitleKey,
     allowCustomFields: allowCustomFields,
+    updatedAt: updatedAt ?? this.updatedAt,
   );
 
   // Only custom categories are persisted; built-ins live in code so new
@@ -62,6 +69,7 @@ class Category {
     'color': colorKey,
     'sortOrder': sortOrder,
     'subtitleKey': subtitleKey,
+    if (updatedAt != null) 'updated': updatedAt!.toIso8601String(),
     'fields': fields.map((f) => f.toJson()).toList(),
   };
 
@@ -72,6 +80,9 @@ class Category {
     colorKey: j['color'] as String? ?? 'blue',
     sortOrder: j['sortOrder'] as int? ?? 100,
     subtitleKey: j['subtitleKey'] as String?,
+    updatedAt: j['updated'] == null
+        ? null
+        : DateTime.parse(j['updated'] as String),
     fields: (j['fields'] as List)
         .map((e) => FieldDef.fromJson(Map<String, dynamic>.from(e as Map)))
         .toList(),
