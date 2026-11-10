@@ -14,7 +14,13 @@ flutter test                # unit + widget tests
 flutter build apk --debug
 ```
 
-Requires Flutter 3.38+ (Dart 3.10+). Android `minSdk` is 24 (needed by `local_auth`).
+Requires Flutter 3.47+ (Dart 3.13+). Android `minSdk` is 24 (needed by `local_auth`).
+
+Android toolchain: Gradle 9.7.0, Android Gradle Plugin 9.2.1 with built-in Kotlin
+(`android.builtInKotlin=true`), Kotlin 2.4.0, Java/Kotlin bytecode target 17. Builds
+with the JDK bundled in current Android Studio (JDK 25); Gradle 9.1+ is needed for
+JDK 25. Expect a Flutter warning that `firebase_core`/`firebase_auth` "apply KGP":
+their build files only do so when built-in Kotlin is off, so it does not apply here.
 
 ## Architecture
 

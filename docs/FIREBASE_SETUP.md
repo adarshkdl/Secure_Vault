@@ -52,6 +52,9 @@ notes and category names are encrypted on the phone before upload.
 2. Choose **Production mode** and a location close to you (cannot be changed later).
 3. Open the **Rules** tab, replace everything with the contents of
    [`firestore.rules`](../firestore.rules) from this project, then **Publish**.
+   Or, with the Firebase CLI (`brew install firebase-cli`, then `firebase login`),
+   set your project id in [`.firebaserc`](../.firebaserc) and run
+   `firebase deploy --only firestore:rules` from the project root.
 
    These rules let a signed-in user read and write only their own
    `users/{their uid}/...` documents and reject malformed writes. Without them
