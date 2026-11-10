@@ -25,9 +25,8 @@ class SettingsTab extends ConsumerWidget {
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
       child: Text(
         t,
-        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-          color: Theme.of(context).colorScheme.primary,
-        ),
+        style: Theme.of(context).textTheme.titleSmall
+            ?.copyWith(color: Theme.of(context).colorScheme.primary),
       ),
     );
 
@@ -258,8 +257,7 @@ class SettingsTab extends ConsumerWidget {
     final ok = await confirmDialog(
       context,
       title: 'Erase everything?',
-      message:
-          'This permanently deletes your vault, settings and biometric key from this device. Without a backup there is no way to recover it.',
+      message: 'This permanently deletes your vault, settings and biometric key from this device. Without a backup there is no way to recover it.',
       confirmLabel: 'Continue',
       destructive: true,
     );

@@ -132,9 +132,11 @@ class _CredentialFormScreenState extends ConsumerState<CredentialFormScreen> {
         return l.isEmpty ? [TextEditingController()] : l;
       });
 
-  String _phoneValue(FieldDef f) => _phones(
-    f,
-  ).map((c) => c.text.trim()).where((s) => s.isNotEmpty).join('\n');
+  String _phoneValue(FieldDef f) =>
+      _phones(f)
+          .map((c) => c.text.trim())
+          .where((s) => s.isNotEmpty)
+          .join('\n');
 
   bool _bool(FieldDef f) =>
       _bools.putIfAbsent(f.key, () => widget.existing?.values[f.key] == 'true');

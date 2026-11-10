@@ -42,9 +42,9 @@ class GradientText extends StatelessWidget {
   Widget build(BuildContext context) {
     return ShaderMask(
       blendMode: BlendMode.srcIn,
-      shaderCallback: (r) => const LinearGradient(
-        colors: [Color(0xFFB7C6FF), Color(0xFFD9B8FF)],
-      ).createShader(r),
+      shaderCallback: (r) =>
+          const LinearGradient(colors: [Color(0xFFB7C6FF), Color(0xFFD9B8FF)])
+              .createShader(r),
       child: Text(text, style: style),
     );
   }
@@ -103,9 +103,8 @@ class StatTile extends StatelessWidget {
                   ),
                   Text(
                     '$value',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+                    style: Theme.of(context).textTheme.headlineSmall
+                        ?.copyWith(fontWeight: FontWeight.w800),
                   ),
                 ],
               ),

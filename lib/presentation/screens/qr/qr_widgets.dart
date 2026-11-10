@@ -144,10 +144,8 @@ class ConfirmationCode extends StatelessWidget {
         child: Text(
           '${code.substring(0, 3)} ${code.substring(3)}',
           textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.displaySmall?.copyWith(
-            fontFamily: 'monospace',
-            letterSpacing: 4,
-          ),
+          style: Theme.of(context).textTheme.displaySmall
+              ?.copyWith(fontFamily: 'monospace', letterSpacing: 4),
         ),
       ),
     );

@@ -257,8 +257,7 @@ class _CategoryEditorState extends ConsumerState<CategoryEditorScreen> {
                         final ok = await confirmDialog(
                           context,
                           title: 'Remove field?',
-                          message:
-                              'Existing records keep any saved value but it will no longer be shown.',
+                          message: 'Existing records keep any saved value but it will no longer be shown.',
                           confirmLabel: 'Remove',
                           destructive: true,
                         );

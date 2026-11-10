@@ -41,8 +41,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
       final enable = await confirmDialog(
         context,
         title: 'Enable biometric unlock?',
-        message:
-            'You can unlock with your fingerprint or face. Your master password will still be required as a fallback.',
+        message: 'You can unlock with your fingerprint or face. Your master password will still be required as a fallback.',
         confirmLabel: 'Enable',
       );
       if (enable) await ref.read(lockGuardProvider).run(vault.enableBiometric);
@@ -113,8 +112,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                       textInputAction: TextInputAction.next,
                       onChanged: (_) => setState(() {}),
                       validator: (v) => validateNewSecret(v, name: 'password'),
-                      helperText:
-                          'At least 10 characters. A long passphrase works well.',
+                      helperText: 'At least 10 characters. A long passphrase works well.',
                     ),
                     StrengthMeter(password: _pw.text),
                     const SizedBox(height: 16),

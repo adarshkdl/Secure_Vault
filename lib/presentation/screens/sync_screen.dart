@@ -97,8 +97,7 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
     if (!ok || !mounted) return;
     final pw = await _askPassword(
       title: 'Cloud vault password',
-      message:
-          'Enter the master password you use for this vault on your other device.',
+      message: 'Enter the master password you use for this vault on your other device.',
       confirmLabel: 'Join',
     );
     if (pw == null || !mounted) return;

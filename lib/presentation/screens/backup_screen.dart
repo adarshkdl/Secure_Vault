@@ -302,8 +302,7 @@ class _RestoreScreenState extends ConsumerState<RestoreScreen> {
     final ok = await confirmDialog(
       context,
       title: 'Replace this vault?',
-      message:
-          'All records on this device will be replaced by the backup. Changes made after the backup was created will be lost. Create a fresh backup of the current vault first if unsure.',
+      message: 'All records on this device will be replaced by the backup. Changes made after the backup was created will be lost. Create a fresh backup of the current vault first if unsure.',
       confirmLabel: 'Replace',
       destructive: true,
     );
