@@ -9,6 +9,7 @@ import '../../domain/credential.dart';
 import '../../domain/field_def.dart';
 import '../helpers.dart';
 import '../theme.dart';
+import '../widgets/dialog_controllers.dart';
 import '../widgets/password_generator.dart';
 import '../widgets/password_widgets.dart';
 import '../widgets/provider_icon.dart';
@@ -216,73 +217,78 @@ class _CredentialFormScreenState extends ConsumerState<CredentialFormScreen> {
   }
 
   Future<void> _addCustomField() async {
-    final label = TextEditingController();
     var type = FieldType.text;
     var sensitive = false;
     final result = await showDialog<FieldDef>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setS) => AlertDialog(
-          title: const Text('Add custom field'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: label,
-                autofocus: true,
-                decoration: const InputDecoration(labelText: 'Field name'),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<FieldType>(
-                initialValue: type,
-                decoration: const InputDecoration(labelText: 'Type'),
-                items: [
-                  for (final t in FieldType.values.where(
-                    (t) => t.userSelectable,
-                  ))
-                    DropdownMenuItem(value: t, child: Text(t.label)),
-                ],
-                onChanged: (v) => setS(() {
-                  type = v ?? FieldType.text;
-                  if (type == FieldType.password) sensitive = true;
-                }),
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Sensitive (masked)'),
-                value: sensitive || type == FieldType.password,
-                onChanged: type == FieldType.password
-                    ? null
-                    : (v) => setS(() => sensitive = v),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(minimumSize: const Size(88, 44)),
-              onPressed: () {
-                if (label.text.trim().isEmpty) return;
-                Navigator.pop(
-                  ctx,
-                  FieldDef(
-                    key: 'x_${newId()}',
-                    label: label.text.trim(),
-                    type: type,
-                    sensitive: sensitive || type == FieldType.password,
+      builder: (ctx) => DialogControllers(
+        builder: (ctx, cs) {
+          final label = cs[0];
+          return StatefulBuilder(
+            builder: (ctx, setS) => AlertDialog(
+              title: const Text('Add custom field'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: label,
+                    autofocus: true,
+                    decoration: const InputDecoration(labelText: 'Field name'),
                   ),
-                );
-              },
-              child: const Text('Add'),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<FieldType>(
+                    initialValue: type,
+                    decoration: const InputDecoration(labelText: 'Type'),
+                    items: [
+                      for (final t in FieldType.values.where(
+                        (t) => t.userSelectable,
+                      ))
+                        DropdownMenuItem(value: t, child: Text(t.label)),
+                    ],
+                    onChanged: (v) => setS(() {
+                      type = v ?? FieldType.text;
+                      if (type == FieldType.password) sensitive = true;
+                    }),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Sensitive (masked)'),
+                    value: sensitive || type == FieldType.password,
+                    onChanged: type == FieldType.password
+                        ? null
+                        : (v) => setS(() => sensitive = v),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(88, 44),
+                  ),
+                  onPressed: () {
+                    if (label.text.trim().isEmpty) return;
+                    Navigator.pop(
+                      ctx,
+                      FieldDef(
+                        key: 'x_${newId()}',
+                        label: label.text.trim(),
+                        type: type,
+                        sensitive: sensitive || type == FieldType.password,
+                      ),
+                    );
+                  },
+                  child: const Text('Add'),
+                ),
+              ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
-    label.dispose();
     if (result != null) {
       setState(() {
         _extras = [..._extras, result];

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../application/providers.dart';
 import '../../application/sync_controller.dart';
 import '../helpers.dart';
+import '../widgets/dialog_controllers.dart';
 import '../widgets/password_widgets.dart';
 import 'backup_screen.dart';
 import 'deleted_screen.dart';
@@ -271,33 +272,37 @@ class SettingsTab extends ConsumerWidget {
       return;
     }
     if (!context.mounted) return;
-    final c = TextEditingController();
     final typed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Final confirmation'),
-        content: TextField(
-          controller: c,
-          decoration: const InputDecoration(labelText: 'Type ERASE to confirm'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              minimumSize: const Size(88, 44),
-              backgroundColor: Theme.of(ctx).colorScheme.error,
-            ),
-            onPressed: () => Navigator.pop(ctx, c.text.trim() == 'ERASE'),
-            child: const Text('Erase'),
-          ),
-        ],
+      builder: (ctx) => DialogControllers(
+        builder: (ctx, cs) => _eraseConfirmDialog(ctx, cs[0]),
       ),
     );
-    c.dispose();
     if (typed == true) await ref.read(vaultProvider.notifier).wipeEverything();
+  }
+
+  Widget _eraseConfirmDialog(BuildContext ctx, TextEditingController c) {
+    return AlertDialog(
+      title: const Text('Final confirmation'),
+      content: TextField(
+        controller: c,
+        decoration: const InputDecoration(labelText: 'Type ERASE to confirm'),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(88, 44),
+            backgroundColor: Theme.of(ctx).colorScheme.error,
+          ),
+          onPressed: () => Navigator.pop(ctx, c.text.trim() == 'ERASE'),
+          child: const Text('Erase'),
+        ),
+      ],
+    );
   }
 
   Future<void> _changePassword(BuildContext context, WidgetRef ref) async {
@@ -310,58 +315,16 @@ class SettingsTab extends ConsumerWidget {
       return;
     }
     if (!context.mounted) return;
-    final pw = TextEditingController(), cf = TextEditingController();
     final key = GlobalKey<FormState>();
-    final go = await showDialog<bool>(
+    // Returns the new password, or null when cancelled.
+    final newPw = await showDialog<String>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setS) => AlertDialog(
-          title: const Text('New master password'),
-          content: Form(
-            key: key,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SecretTextField(
-                    controller: pw,
-                    label: 'New master password',
-                    autofocus: true,
-                    onChanged: (_) => setS(() {}),
-                    validator: (v) => validateNewSecret(v),
-                  ),
-                  StrengthMeter(password: pw.text),
-                  const SizedBox(height: 12),
-                  SecretTextField(
-                    controller: cf,
-                    label: 'Confirm',
-                    validator: (v) =>
-                        v == pw.text ? null : 'Passwords do not match',
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(minimumSize: const Size(88, 44)),
-              onPressed: () {
-                if (key.currentState!.validate()) Navigator.pop(ctx, true);
-              },
-              child: const Text('Change'),
-            ),
-          ],
-        ),
+      builder: (ctx) => DialogControllers(
+        initialTexts: const ['', ''],
+        builder: (ctx, cs) => _newPasswordDialog(ctx, key, cs[0], cs[1]),
       ),
     );
-    final newPw = pw.text;
-    pw.dispose();
-    cf.dispose();
-    if (go != true) return;
+    if (newPw == null) return;
     final syncOn = ref.read(syncStoreProvider).enabledUid != null;
     await ref
         .read(vaultProvider.notifier)
@@ -370,5 +333,56 @@ class SettingsTab extends ConsumerWidget {
       await ref.read(syncControllerProvider.notifier).onPasswordChanged();
     }
     if (context.mounted) showSnack(context, 'Master password changed.');
+  }
+
+  Widget _newPasswordDialog(
+    BuildContext ctx,
+    GlobalKey<FormState> key,
+    TextEditingController pw,
+    TextEditingController cf,
+  ) {
+    return StatefulBuilder(
+      builder: (ctx, setS) => AlertDialog(
+        title: const Text('New master password'),
+        content: Form(
+          key: key,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SecretTextField(
+                  controller: pw,
+                  label: 'New master password',
+                  autofocus: true,
+                  onChanged: (_) => setS(() {}),
+                  validator: (v) => validateNewSecret(v),
+                ),
+                StrengthMeter(password: pw.text),
+                const SizedBox(height: 12),
+                SecretTextField(
+                  controller: cf,
+                  label: 'Confirm',
+                  validator: (v) =>
+                      v == pw.text ? null : 'Passwords do not match',
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(minimumSize: const Size(88, 44)),
+            onPressed: () {
+              if (key.currentState!.validate()) Navigator.pop(ctx, pw.text);
+            },
+            child: const Text('Change'),
+          ),
+        ],
+      ),
+    );
   }
 }

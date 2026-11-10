@@ -12,6 +12,7 @@ import '../data/sync/sync_engine.dart';
 import '../data/sync/sync_models.dart';
 import '../data/sync/sync_state_prefs.dart';
 import '../data/vault_repository.dart';
+import '../domain/vault_data.dart';
 import 'providers.dart';
 
 enum SyncPhase {
@@ -269,6 +270,82 @@ class SyncController extends Notifier<SyncUiState> {
     } catch (e) {
       state = state.copyWith(phase: SyncPhase.needsJoin, message: _describe(e));
       return _describe(e);
+    }
+  }
+
+  // -- Restore on a fresh install -------------------------------------------
+
+  /// Whether the signed-in account holds a cloud vault. Throws on network or
+  /// backend errors (use [describeError] for a message).
+  Future<bool> hasCloudVault() async {
+    final u = _auth?.currentUser;
+    if (u == null) return false;
+    return await _remote(u.uid).getHeader() != null;
+  }
+
+  /// User-facing text for an error thrown by a sync call.
+  String describeError(Object e) => _describe(e);
+
+  /// Fresh install (no vault on this device yet): rebuilds the vault from the
+  /// cloud. The cloud's master password unlocks the downloaded key header;
+  /// every record is downloaded and its integrity checked before anything is
+  /// written; then the local vault is created in one atomic save and sync is
+  /// turned on. On any failure nothing is written. Returns an error message,
+  /// or null on success.
+  Future<String?> restoreFromCloud(String cloudPassword) async {
+    final u = _auth?.currentUser;
+    if (u == null) return 'Sign in first.';
+    List<int>? dek;
+    var adopted = false;
+    try {
+      final remote = _remote(u.uid);
+      final header = await remote.getHeader();
+      if (header == null) return 'No cloud vault found for this account.';
+      if (!header.kdf.withinSafeLimits) {
+        return 'The cloud vault header is not valid.';
+      }
+      try {
+        dek = await VaultRepository.unwrapDek(
+          cloudPassword,
+          header.kdf,
+          header.wrapped,
+        );
+      } on DecryptionFailure {
+        return 'Wrong master password for the cloud vault.';
+      }
+      await _store.clear(u.uid); // full download, not an incremental one
+      final engine = SyncEngine(remote: remote, store: _store, uid: u.uid);
+      final run = await engine.run(VaultData(), dek);
+      _selfChange = true;
+      try {
+        await _vault.restoreFromCloud(
+          dek: dek,
+          kdf: header.kdf,
+          wrapped: header.wrapped,
+          data: run.merged,
+        );
+        adopted = true; // the vault session now owns the key
+      } finally {
+        _selfChange = false;
+      }
+      await run.commit();
+      await _enable(u.uid);
+      final bad = run.report.rejected;
+      state = state.copyWith(
+        email: u.email,
+        lastSync: run.report.at,
+        lastReport: run.report,
+        message: bad > 0
+            ? '$bad cloud item(s) failed verification and were skipped.'
+            : null,
+      );
+      return null;
+    } on StateError catch (e) {
+      return e.message;
+    } catch (e) {
+      return _describe(e);
+    } finally {
+      if (!adopted && dek != null) VaultCrypto.wipe(dek);
     }
   }
 

@@ -440,6 +440,26 @@ class VaultController extends Notifier<VaultState> {
     await disableBiometric();
   }
 
+  /// Fresh install: creates this device's vault from a cloud vault, using the
+  /// cloud's data key and master-password wrapper (so the same master password
+  /// unlocks it). Refuses to run when a vault file already exists, so an
+  /// existing vault is never overwritten silently. Nothing is written until
+  /// [data] has been fully downloaded and verified by the caller.
+  Future<void> restoreFromCloud({
+    required List<int> dek,
+    required KdfParams kdf,
+    required Sealed wrapped,
+    required VaultData data,
+  }) async {
+    if (await _repo.exists()) {
+      throw StateError('A vault already exists on this device.');
+    }
+    final s = VaultSession(dek: dek, kdf: kdf, wrapped: wrapped);
+    await _repo.save(s, data); // atomic temp-file + rename
+    await _store.saveAttempts(0, null);
+    _unlocked(s, data);
+  }
+
   /// Replaces vault contents with a verified, decrypted backup. The existing
   /// master password and data key are kept, so device-bound secrets are never
   /// imported. The previous file is only replaced by the atomic save.

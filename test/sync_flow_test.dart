@@ -215,4 +215,93 @@ void main() {
     // Local data is untouched.
     expect(a.read(vaultProvider).data!.credentials.single.id, 'z1');
   });
+
+  test('reinstall: a fresh device restores the cloud vault', () async {
+    const pw = 'Synthetic-Pass-Restore-4!';
+    final a = await device(prefs, remote, FakeAuth());
+    final av = a.read(vaultProvider.notifier);
+    await av.createVault(pw);
+    await av.saveCredential(cred('r1', 'Mail'));
+    await av.saveCredential(cred('r2', 'Router'));
+    final asc = a.read(syncControllerProvider.notifier);
+    await asc.signIn();
+    expect(await asc.createCloudVault(pw), isNull);
+    final cloudBefore = Map.of(remote.items);
+
+    // --- Same user after uninstall + reinstall: no local vault ---------------
+    final c = await device(prefs, remote, FakeAuth());
+    final cv = c.read(vaultProvider.notifier);
+    await cv.init();
+    expect(c.read(vaultProvider).status, VaultStatus.noVault);
+    final csc = c.read(syncControllerProvider.notifier);
+    await csc.signIn();
+    expect(await csc.hasCloudVault(), isTrue);
+
+    // Wrong password: rejected, nothing written.
+    expect(
+      await csc.restoreFromCloud('wrong-password-xx'),
+      'Wrong master password for the cloud vault.',
+    );
+    expect(c.read(vaultProvider).status, VaultStatus.noVault);
+    expect(await c.read(repositoryProvider).exists(), isFalse);
+
+    // Correct password: records are back, unlocked, and sync is on.
+    expect(await csc.restoreFromCloud(pw), isNull);
+    final vs = c.read(vaultProvider);
+    expect(vs.status, VaultStatus.unlocked);
+    expect(vs.data!.credentials.map((x) => x.title).toSet(), {
+      'Mail',
+      'Router',
+    });
+    expect(
+      vs.data!.credentials.first.values['password'],
+      startsWith('synthetic-'),
+    );
+    expect(c.read(syncControllerProvider).phase, SyncPhase.ready);
+    expect(c.read(syncStoreProvider).enabledUid, 'user-1');
+    // Restoring only downloads: the cloud copy is unchanged.
+    expect(remote.items.keys.toSet(), cloudBefore.keys.toSet());
+    expect(
+      remote.items.values.map((i) => i.serverTime),
+      cloudBefore.values.map((i) => i.serverTime),
+    );
+
+    // The restored vault is saved on disk and opens with the same password.
+    cv.lock();
+    expect(await cv.unlock('wrong-password-xx'), UnlockResult.wrongPassword);
+    expect(await cv.unlock(pw), UnlockResult.ok);
+    expect(c.read(vaultProvider).data!.credentials, hasLength(2));
+
+    // An existing vault is never overwritten by a restore.
+    expect(
+      await csc.restoreFromCloud(pw),
+      'A vault already exists on this device.',
+    );
+
+    // Edits after restoring keep syncing both ways.
+    await cv.saveCredential(cred('r3', 'New on restored device'));
+    await csc.syncNow();
+    await asc.syncNow();
+    expect(a.read(vaultProvider).data!.credentials.map((x) => x.id).toSet(), {
+      'r1',
+      'r2',
+      'r3',
+    });
+  });
+
+  test('restore explains when the account has no cloud vault', () async {
+    final c = await device(prefs, remote, FakeAuth());
+    final cv = c.read(vaultProvider.notifier);
+    await cv.init();
+    final csc = c.read(syncControllerProvider.notifier);
+    expect(await csc.restoreFromCloud('Synthetic-Pass-5!'), 'Sign in first.');
+    await csc.signIn();
+    expect(await csc.hasCloudVault(), isFalse);
+    expect(
+      await csc.restoreFromCloud('Synthetic-Pass-5!'),
+      'No cloud vault found for this account.',
+    );
+    expect(c.read(vaultProvider).status, VaultStatus.noVault);
+    expect(await c.read(repositoryProvider).exists(), isFalse);
+  });
 }

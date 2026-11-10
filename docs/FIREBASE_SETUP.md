@@ -77,12 +77,22 @@ Open **Settings -> Cloud sync**. If it says "not set up in this build", the
    master-password protection of the key stronger first (64 MiB, 3 passes), then
    uploads the encrypted key header and your encrypted records.
 
-### Every other device
+### Reinstalled app or new phone (no vault on it yet)
 
-1. Install the app and create a vault (any password; you will switch to the
-   cloud one) or just set it up normally.
-2. **Settings -> Cloud sync -> Sign in with Google** (same account).
-3. **Join cloud vault** and enter the master password from the first device.
+1. Open the app. On the welcome screen tap **Restore from cloud**.
+2. **Sign in with Google** (the same account you used for sync).
+3. Enter the master password of the cloud vault and tap **Restore vault**.
+
+The app downloads every encrypted record, checks it, and only then creates the
+vault on this phone, unlocked with that same master password. Sync stays on. A
+wrong password or a network error writes nothing. Restore never runs over an
+existing vault on the device. Biometric unlock is offered again afterwards,
+because the old phone's biometric key cannot be moved.
+
+### A device that already has its own vault
+
+1. **Settings -> Cloud sync -> Sign in with Google** (same account).
+2. **Join cloud vault** and enter the master password from the first device.
    This device then uses that master password. Records already on it are kept
    and merged in.
 

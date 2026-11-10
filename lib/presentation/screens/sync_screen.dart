@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../application/sync_controller.dart';
 import '../helpers.dart';
+import '../widgets/dialog_controllers.dart';
 import '../widgets/password_widgets.dart';
 
 /// Cloud sync (Firebase). The server only ever stores ciphertext.
@@ -30,43 +31,59 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
     required String message,
     required String confirmLabel,
   }) async {
-    final c = TextEditingController();
     final r = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(message),
-              const SizedBox(height: 12),
-              SecretTextField(
-                controller: c,
-                label: 'Master password',
-                autofocus: true,
-                textInputAction: TextInputAction.done,
-                onSubmitted: (_) => Navigator.pop(ctx, c.text),
-              ),
-            ],
-          ),
+      builder: (ctx) => DialogControllers(
+        builder: (ctx, cs) => _passwordDialog(
+          ctx,
+          cs[0],
+          title: title,
+          message: message,
+          confirmLabel: confirmLabel,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(minimumSize: const Size(88, 44)),
-            onPressed: () => Navigator.pop(ctx, c.text),
-            child: Text(confirmLabel),
-          ),
-        ],
       ),
     );
-    c.dispose();
     return (r == null || r.isEmpty) ? null : r;
+  }
+
+  Widget _passwordDialog(
+    BuildContext ctx,
+    TextEditingController c, {
+    required String title,
+    required String message,
+    required String confirmLabel,
+  }) {
+    return AlertDialog(
+      title: Text(title),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(message),
+            const SizedBox(height: 12),
+            SecretTextField(
+              controller: c,
+              label: 'Master password',
+              autofocus: true,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => Navigator.pop(ctx, c.text),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(minimumSize: const Size(88, 44)),
+          onPressed: () => Navigator.pop(ctx, c.text),
+          child: Text(confirmLabel),
+        ),
+      ],
+    );
   }
 
   Future<void> _create() async {
