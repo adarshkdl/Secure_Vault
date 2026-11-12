@@ -43,3 +43,9 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Firebase client config: your own project, keep out of git
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+firebase_options.dart
+android/build/

@@ -117,9 +117,9 @@ class QrTransfer {
     final int expMs;
     try {
       if (!offer.startsWith(offerPrefix)) throw const FormatException();
-      o =
-          jsonDecode(utf8.decode(_unb64(offer.substring(offerPrefix.length))))
-              as Map<String, dynamic>;
+      o = jsonDecode(
+        utf8.decode(_unb64(offer.substring(offerPrefix.length))),
+      ) as Map<String, dynamic>;
       if (o['v'] != version) throw const FormatException();
       sid = _unb64(o['sid'] as String);
       receiverPk = _unb64(o['pk'] as String);
@@ -229,15 +229,13 @@ class QrReceiveSession {
       if (!response.startsWith(QrTransfer.responsePrefix)) {
         throw const FormatException();
       }
-      m =
-          jsonDecode(
-                utf8.decode(
-                  QrTransfer._unb64(
-                    response.substring(QrTransfer.responsePrefix.length),
-                  ),
-                ),
-              )
-              as Map<String, dynamic>;
+      m = jsonDecode(
+        utf8.decode(
+          QrTransfer._unb64(
+            response.substring(QrTransfer.responsePrefix.length),
+          ),
+        ),
+      ) as Map<String, dynamic>;
       if (m['v'] != QrTransfer.version) throw const FormatException();
       sid = QrTransfer._unb64(m['sid'] as String);
       senderPk = QrTransfer._unb64(m['spk'] as String);

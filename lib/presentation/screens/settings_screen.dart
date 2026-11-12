@@ -2,13 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../application/providers.dart';
+import '../../application/sync_controller.dart';
 import '../helpers.dart';
+import '../widgets/dialog_controllers.dart';
 import '../widgets/password_widgets.dart';
 import 'backup_screen.dart';
 import 'deleted_screen.dart';
 import 'import_screen.dart';
 import 'info_screen.dart';
 import 'qr/qr_receive_screen.dart';
+import 'sync_screen.dart';
 
 class SettingsTab extends ConsumerWidget {
   const SettingsTab({super.key});
@@ -23,9 +26,8 @@ class SettingsTab extends ConsumerWidget {
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
       child: Text(
         t,
-        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-          color: Theme.of(context).colorScheme.primary,
-        ),
+        style: Theme.of(context).textTheme.titleSmall
+            ?.copyWith(color: Theme.of(context).colorScheme.primary),
       ),
     );
 
@@ -161,6 +163,27 @@ class SettingsTab extends ConsumerWidget {
           ),
         ),
         header('Data'),
+        Consumer(
+          builder: (context, ref, _) {
+            final st = ref.watch(syncControllerProvider);
+            final sub = switch (st.phase) {
+              SyncPhase.unavailable => 'Not set up in this build',
+              SyncPhase.signedOut || SyncPhase.checking => 'Off',
+              SyncPhase.needsSetup || SyncPhase.needsJoin => 'Finish setup',
+              SyncPhase.error => 'Problem - tap for details',
+              SyncPhase.ready || SyncPhase.syncing => 'On - ${st.email ?? ''}',
+            };
+            return ListTile(
+              leading: const Icon(Icons.cloud_sync_outlined),
+              title: const Text('Cloud sync'),
+              subtitle: Text('Encrypted, via Firebase. $sub'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const SyncScreen()),
+              ),
+            );
+          },
+        ),
         ListTile(
           leading: const Icon(Icons.backup_outlined),
           title: const Text('Backup & restore'),
@@ -235,8 +258,7 @@ class SettingsTab extends ConsumerWidget {
     final ok = await confirmDialog(
       context,
       title: 'Erase everything?',
-      message:
-          'This permanently deletes your vault, settings and biometric key from this device. Without a backup there is no way to recover it.',
+      message: 'This permanently deletes your vault, settings and biometric key from this device. Without a backup there is no way to recover it.',
       confirmLabel: 'Continue',
       destructive: true,
     );
@@ -250,33 +272,37 @@ class SettingsTab extends ConsumerWidget {
       return;
     }
     if (!context.mounted) return;
-    final c = TextEditingController();
     final typed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Final confirmation'),
-        content: TextField(
-          controller: c,
-          decoration: const InputDecoration(labelText: 'Type ERASE to confirm'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              minimumSize: const Size(88, 44),
-              backgroundColor: Theme.of(ctx).colorScheme.error,
-            ),
-            onPressed: () => Navigator.pop(ctx, c.text.trim() == 'ERASE'),
-            child: const Text('Erase'),
-          ),
-        ],
+      builder: (ctx) => DialogControllers(
+        builder: (ctx, cs) => _eraseConfirmDialog(ctx, cs[0]),
       ),
     );
-    c.dispose();
     if (typed == true) await ref.read(vaultProvider.notifier).wipeEverything();
+  }
+
+  Widget _eraseConfirmDialog(BuildContext ctx, TextEditingController c) {
+    return AlertDialog(
+      title: const Text('Final confirmation'),
+      content: TextField(
+        controller: c,
+        decoration: const InputDecoration(labelText: 'Type ERASE to confirm'),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(88, 44),
+            backgroundColor: Theme.of(ctx).colorScheme.error,
+          ),
+          onPressed: () => Navigator.pop(ctx, c.text.trim() == 'ERASE'),
+          child: const Text('Erase'),
+        ),
+      ],
+    );
   }
 
   Future<void> _changePassword(BuildContext context, WidgetRef ref) async {
@@ -289,59 +315,74 @@ class SettingsTab extends ConsumerWidget {
       return;
     }
     if (!context.mounted) return;
-    final pw = TextEditingController(), cf = TextEditingController();
     final key = GlobalKey<FormState>();
-    final go = await showDialog<bool>(
+    // Returns the new password, or null when cancelled.
+    final newPw = await showDialog<String>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setS) => AlertDialog(
-          title: const Text('New master password'),
-          content: Form(
-            key: key,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SecretTextField(
-                    controller: pw,
-                    label: 'New master password',
-                    autofocus: true,
-                    onChanged: (_) => setS(() {}),
-                    validator: (v) => validateNewSecret(v),
-                  ),
-                  StrengthMeter(password: pw.text),
-                  const SizedBox(height: 12),
-                  SecretTextField(
-                    controller: cf,
-                    label: 'Confirm',
-                    validator: (v) =>
-                        v == pw.text ? null : 'Passwords do not match',
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(minimumSize: const Size(88, 44)),
-              onPressed: () {
-                if (key.currentState!.validate()) Navigator.pop(ctx, true);
-              },
-              child: const Text('Change'),
-            ),
-          ],
-        ),
+      builder: (ctx) => DialogControllers(
+        initialTexts: const ['', ''],
+        builder: (ctx, cs) => _newPasswordDialog(ctx, key, cs[0], cs[1]),
       ),
     );
-    final newPw = pw.text;
-    pw.dispose();
-    cf.dispose();
-    if (go != true) return;
-    await ref.read(vaultProvider.notifier).changeMasterPassword(newPw);
+    if (newPw == null) return;
+    final syncOn = ref.read(syncStoreProvider).enabledUid != null;
+    await ref
+        .read(vaultProvider.notifier)
+        .changeMasterPassword(newPw, cloudStrength: syncOn);
+    if (syncOn) {
+      await ref.read(syncControllerProvider.notifier).onPasswordChanged();
+    }
     if (context.mounted) showSnack(context, 'Master password changed.');
+  }
+
+  Widget _newPasswordDialog(
+    BuildContext ctx,
+    GlobalKey<FormState> key,
+    TextEditingController pw,
+    TextEditingController cf,
+  ) {
+    return StatefulBuilder(
+      builder: (ctx, setS) => AlertDialog(
+        title: const Text('New master password'),
+        content: Form(
+          key: key,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SecretTextField(
+                  controller: pw,
+                  label: 'New master password',
+                  autofocus: true,
+                  onChanged: (_) => setS(() {}),
+                  validator: (v) => validateNewSecret(v),
+                ),
+                StrengthMeter(password: pw.text),
+                const SizedBox(height: 12),
+                SecretTextField(
+                  controller: cf,
+                  label: 'Confirm',
+                  validator: (v) =>
+                      v == pw.text ? null : 'Passwords do not match',
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(minimumSize: const Size(88, 44)),
+            onPressed: () {
+              if (key.currentState!.validate()) Navigator.pop(ctx, pw.text);
+            },
+            child: const Text('Change'),
+          ),
+        ],
+      ),
+    );
   }
 }

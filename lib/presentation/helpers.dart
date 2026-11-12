@@ -95,12 +95,10 @@ Future<bool> reauthenticate(
     if (ok) return true;
   }
   if (!context.mounted) return false;
-  final controller = TextEditingController();
   final password = await showDialog<String>(
     context: context,
-    builder: (ctx) => _PasswordPrompt(controller: controller, reason: reason),
+    builder: (ctx) => _PasswordPrompt(reason: reason),
   );
-  controller.dispose();
   if (password == null || password.isEmpty) return false;
   final ok = await vault.verifyMasterPassword(password);
   if (!ok && context.mounted) showSnack(context, 'Incorrect master password');
@@ -108,8 +106,7 @@ Future<bool> reauthenticate(
 }
 
 class _PasswordPrompt extends StatefulWidget {
-  const _PasswordPrompt({required this.controller, required this.reason});
-  final TextEditingController controller;
+  const _PasswordPrompt({required this.reason});
   final String reason;
 
   @override
@@ -118,6 +115,15 @@ class _PasswordPrompt extends StatefulWidget {
 
 class _PasswordPromptState extends State<_PasswordPrompt> {
   bool _obscure = true;
+
+  // Owned here so it is disposed only after the dialog's closing animation.
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -130,7 +136,7 @@ class _PasswordPromptState extends State<_PasswordPrompt> {
           Text(widget.reason),
           const SizedBox(height: 12),
           TextField(
-            controller: widget.controller,
+            controller: _controller,
             autofocus: true,
             obscureText: _obscure,
             enableSuggestions: false,
@@ -154,7 +160,7 @@ class _PasswordPromptState extends State<_PasswordPrompt> {
         ),
         FilledButton(
           style: FilledButton.styleFrom(minimumSize: const Size(88, 44)),
-          onPressed: () => Navigator.pop(context, widget.controller.text),
+          onPressed: () => Navigator.pop(context, _controller.text),
           child: const Text('Verify'),
         ),
       ],

@@ -6,6 +6,7 @@ import '../../domain/category.dart';
 import '../../domain/field_def.dart';
 import '../helpers.dart';
 import '../theme.dart';
+import '../widgets/dialog_controllers.dart';
 
 class CategoryEditorScreen extends ConsumerStatefulWidget {
   const CategoryEditorScreen({super.key, this.existing});
@@ -40,83 +41,91 @@ class _CategoryEditorState extends ConsumerState<CategoryEditorScreen> {
 
   Future<void> _editField([int? index]) async {
     final existing = index == null ? null : _fields[index];
-    final label = TextEditingController(text: existing?.label ?? '');
     var type = existing?.type ?? FieldType.text;
     var sensitive = existing?.sensitive ?? false;
     var required = existing?.required ?? false;
     final result = await showDialog<FieldDef>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setS) => AlertDialog(
-          title: Text(existing == null ? 'Add field' : 'Edit field'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: label,
-                  autofocus: true,
-                  decoration: const InputDecoration(labelText: 'Field name'),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<FieldType>(
-                  initialValue: type.userSelectable ? type : FieldType.text,
-                  decoration: const InputDecoration(labelText: 'Type'),
-                  items: [
-                    for (final t in FieldType.values.where(
-                      (t) => t.userSelectable,
-                    ))
-                      DropdownMenuItem(value: t, child: Text(t.label)),
+      builder: (ctx) => DialogControllers(
+        initialTexts: [existing?.label ?? ''],
+        builder: (ctx, cs) {
+          final label = cs[0];
+          return StatefulBuilder(
+            builder: (ctx, setS) => AlertDialog(
+              title: Text(existing == null ? 'Add field' : 'Edit field'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: label,
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Field name',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<FieldType>(
+                      initialValue: type.userSelectable ? type : FieldType.text,
+                      decoration: const InputDecoration(labelText: 'Type'),
+                      items: [
+                        for (final t in FieldType.values.where(
+                          (t) => t.userSelectable,
+                        ))
+                          DropdownMenuItem(value: t, child: Text(t.label)),
+                      ],
+                      onChanged: (v) => setS(() {
+                        type = v ?? FieldType.text;
+                        if (type == FieldType.password) sensitive = true;
+                      }),
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Sensitive (masked, never previewed)'),
+                      value: sensitive || type == FieldType.password,
+                      onChanged: type == FieldType.password
+                          ? null
+                          : (v) => setS(() => sensitive = v),
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Required'),
+                      value: required,
+                      onChanged: (v) => setS(() => required = v),
+                    ),
                   ],
-                  onChanged: (v) => setS(() {
-                    type = v ?? FieldType.text;
-                    if (type == FieldType.password) sensitive = true;
-                  }),
                 ),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Sensitive (masked, never previewed)'),
-                  value: sensitive || type == FieldType.password,
-                  onChanged: type == FieldType.password
-                      ? null
-                      : (v) => setS(() => sensitive = v),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
                 ),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Required'),
-                  value: required,
-                  onChanged: (v) => setS(() => required = v),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(88, 44),
+                  ),
+                  onPressed: () {
+                    if (label.text.trim().isEmpty) return;
+                    Navigator.pop(
+                      ctx,
+                      FieldDef(
+                        key: existing?.key ?? 'f_${newId()}',
+                        label: label.text.trim(),
+                        type: type,
+                        sensitive: sensitive || type == FieldType.password,
+                        required: required,
+                      ),
+                    );
+                  },
+                  child: const Text('Save'),
                 ),
               ],
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(minimumSize: const Size(88, 44)),
-              onPressed: () {
-                if (label.text.trim().isEmpty) return;
-                Navigator.pop(
-                  ctx,
-                  FieldDef(
-                    key: existing?.key ?? 'f_${newId()}',
-                    label: label.text.trim(),
-                    type: type,
-                    sensitive: sensitive || type == FieldType.password,
-                    required: required,
-                  ),
-                );
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
-    label.dispose();
     if (result == null) return;
     setState(() {
       if (index == null) {
@@ -257,8 +266,7 @@ class _CategoryEditorState extends ConsumerState<CategoryEditorScreen> {
                         final ok = await confirmDialog(
                           context,
                           title: 'Remove field?',
-                          message:
-                              'Existing records keep any saved value but it will no longer be shown.',
+                          message: 'Existing records keep any saved value but it will no longer be shown.',
                           confirmLabel: 'Remove',
                           destructive: true,
                         );

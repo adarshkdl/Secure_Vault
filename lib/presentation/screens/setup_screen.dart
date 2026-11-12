@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../application/providers.dart';
+import '../../application/sync_controller.dart';
 import '../helpers.dart';
 import '../widgets/password_widgets.dart';
+import 'restore_cloud_screen.dart';
 
 class SetupScreen extends ConsumerStatefulWidget {
   const SetupScreen({super.key});
@@ -41,8 +43,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
       final enable = await confirmDialog(
         context,
         title: 'Enable biometric unlock?',
-        message:
-            'You can unlock with your fingerprint or face. Your master password will still be required as a fallback.',
+        message: 'You can unlock with your fingerprint or face. Your master password will still be required as a fallback.',
         confirmLabel: 'Enable',
       );
       if (enable) await ref.read(lockGuardProvider).run(vault.enableBiometric);
@@ -52,6 +53,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final cloudAvailable = ref.watch(firebaseReadyProvider);
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -77,7 +79,9 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      'Your credentials are encrypted and stored only on this device. There is no account and no cloud sync.',
+                      cloudAvailable
+                          ? 'Your credentials are encrypted and stored on this device. No account is needed; encrypted cloud sync is optional.'
+                          : 'Your credentials are encrypted and stored only on this device. There is no account and no cloud sync.',
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.bodyLarge,
                     ),
@@ -113,8 +117,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                       textInputAction: TextInputAction.next,
                       onChanged: (_) => setState(() {}),
                       validator: (v) => validateNewSecret(v, name: 'password'),
-                      helperText:
-                          'At least 10 characters. A long passphrase works well.',
+                      helperText: 'At least 10 characters. A long passphrase works well.',
                     ),
                     StrengthMeter(password: _pw.text),
                     const SizedBox(height: 16),
@@ -146,6 +149,28 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                             )
                           : const Text('Create vault'),
                     ),
+                    if (cloudAvailable) ...[
+                      const SizedBox(height: 24),
+                      const Divider(),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Reinstalled the app or using a new phone? If you turned on cloud sync before, get your vault back.',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed: _busy
+                            ? null
+                            : () => Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => const RestoreCloudScreen(),
+                                ),
+                              ),
+                        icon: const Icon(Icons.cloud_download_outlined),
+                        label: const Text('Restore from cloud'),
+                      ),
+                    ],
                   ],
                 ),
               ),

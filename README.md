@@ -14,7 +14,13 @@ flutter test                # unit + widget tests
 flutter build apk --debug
 ```
 
-Requires Flutter 3.38+ (Dart 3.10+). Android `minSdk` is 24 (needed by `local_auth`).
+Requires Flutter 3.47+ (Dart 3.13+). Android `minSdk` is 24 (needed by `local_auth`).
+
+Android toolchain: Gradle 9.7.0, Android Gradle Plugin 9.2.1 with built-in Kotlin
+(`android.builtInKotlin=true`), Kotlin 2.4.0, Java/Kotlin bytecode target 17. Builds
+with the JDK bundled in current Android Studio (JDK 25); Gradle 9.1+ is needed for
+JDK 25. Expect a Flutter warning that `firebase_core`/`firebase_auth` "apply KGP":
+their build files only do so when built-in Kotlin is off, so it does not apply here.
 
 ## Architecture
 
@@ -65,7 +71,8 @@ Business logic lives in `core/`, `data/` and `application/`; widgets only render
 - Look and feel: light theme follows the VaultKeeper mockup (deep-blue headers, white cards, blue buttons); dark theme is the navy glass style. Light is the default for new installs; dark and system remain in Settings. Splash (native + in-app), unlock screen and Home dashboard (stat tiles, Quick Access, Recent Items) follow the mockup. App icon and splash images are rendered from the in-code logo: `flutter test tool/gen_icons_test.dart`, then `dart run flutter_launcher_icons` and `dart run flutter_native_splash:create`.
 - Static IP: no title box (the configuration name is the title), no MAC, VLAN or location fields, no custom fields. Older records keep such values but they are no longer shown.
 - Import: Bitwarden JSON/CSV, 1Password, LastPass, Chrome/Edge/Firefox and generic CSV logins, parsed in memory only, re-auth required, duplicates skipped, cached picker copy cleared. Cards, identities and notes are not imported.
-- Not implemented (later phases): E2E sync.
+- Cloud sync (optional, Firebase): per-record end-to-end encrypted sync. Each record is sealed on the device (AES-256-GCM, key derived from the vault key with HKDF, record id and edit time bound in as associated data) and stored as its own Firestore document; the server sees only ids, edit times, deleted flags and sizes. Google sign-in identifies the account; the master password still unlocks the vault and is never uploaded. Newer edit wins per record, permanent deletes are remembered (tombstones). After a reinstall or on a new phone, **Restore from cloud** on the welcome screen rebuilds the vault from the cloud with the same master password (all records are downloaded and verified before anything is written; never runs over an existing vault). Setup: docs/FIREBASE_SETUP.md; rules: firestore.rules. Needs your own Firebase project; without google-services.json the app runs offline-only.
+- Not implemented: field-level merge, App Check, iOS verification of cloud sync.
 
 ## Manual test checklist (Android and iOS)
 

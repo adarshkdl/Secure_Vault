@@ -139,19 +139,37 @@ class VaultRepository {
   }
 
   /// Re-wraps the data key under a key derived from [newPassword] with a new
-  /// random salt. Caller must have verified the current password.
+  /// random salt. Caller must have verified the current password. Pass [kdf]
+  /// to choose the parameters (used to raise the cost before a key header is
+  /// uploaded to the cloud).
   Future<void> changePassword(
     VaultSession s,
     VaultData data,
-    String newPassword,
-  ) async {
-    final kdf = _kdfFactory();
-    final kek = await VaultCrypto.deriveKey(newPassword, kdf);
+    String newPassword, {
+    KdfParams? kdf,
+  }) async {
+    final params = kdf ?? _kdfFactory();
+    final kek = await VaultCrypto.deriveKey(newPassword, params);
     final wrapped = await VaultCrypto.seal(s.dek, kek, aad: _aadKey);
     VaultCrypto.wipe(kek);
-    s.kdf = kdf;
+    s.kdf = params;
     s.wrapped = wrapped;
     await save(s, data);
+  }
+
+  /// Opens a wrapped data key with a master password (used when joining a
+  /// cloud vault). Throws [DecryptionFailure] on a wrong password.
+  static Future<List<int>> unwrapDek(
+    String password,
+    KdfParams kdf,
+    Sealed wrapped,
+  ) async {
+    final kek = await VaultCrypto.deriveKey(password, kdf);
+    try {
+      return await VaultCrypto.open(wrapped, kek, aad: _aadKey);
+    } finally {
+      VaultCrypto.wipe(kek);
+    }
   }
 
   /// Checks a password without changing any state.
